@@ -66,8 +66,8 @@ class MyPlugin(Star):
         # 处理置顶项
         pinned = soup.select_one('#pl_top_realtimehot table tr td.td-02 a')
         if pinned:
-            result += f"置顶.{pinned.text.strip()}(🔥置顶)"
-            
+            result += f"置顶.{pinned.text.strip()}(🔥置顶)\n"
+
         for i, item in enumerate(soup.select('#pl_top_realtimehot tbody tr')[1:], 1):
             title = item.select_one('.td-02 a').text.strip()
             hot = item.select_one('.td-02 span').text.strip() if item.select_one('.td-02 span') else "0"

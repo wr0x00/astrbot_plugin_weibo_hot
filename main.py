@@ -19,7 +19,7 @@ class MyPlugin(Star):
     # 将 weibohot 方法改为异步调用
     @filter.command("wbhot")
     async def weibohot(self, event: AstrMessageEvent):
-        event.plain_result("微博bot为您服务~")
+        yield event.plain_result("微博bot为您服务~")
         result = await self.fetch_weibo_hot_simple()
         if result:
             yield event.plain_result(result)

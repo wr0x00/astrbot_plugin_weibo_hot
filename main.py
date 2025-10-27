@@ -2,7 +2,8 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 
-import requests
+import httpx
+import json
 from bs4 import BeautifulSoup
 
 
@@ -15,64 +16,45 @@ class MyPlugin(Star):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
 
     
+    # 将 weibohot 方法改为异步调用
     @filter.command("wbhot")
     async def weibohot(self, event: AstrMessageEvent):
-        '''
-        await event.send(event.plain_result("微博bot为您服务 ٩( 'ω' )و"))
-        hot_list = self.fetch_weibo_hot_simple()
-        print(hot_list)
-        """美观地显示热搜列表"""
-        if not hot_list:
-            event.chain_result("❌ 未能获取到微博热榜数据")
-            return
-        
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        event.chain_result("\n" + "="*70)
-        event.chain_result(f"🔥 微博实时热榜 (更新时间: {current_time})")
-        event.chain_result("="*70)
-        
-        for item in hot_list:
-            rank = item['排名']
-            title = item['标题']
-            hot_value = item['热度值']
-            category = f"[{item['分类']}]" if item['分类'] else ""
-            label = f"({item['标签']})" if item['标签'] else ""
-            
-            # 格式化输出，确保对齐
-            event.chain_result(f"{rank:2d}. {title}")
-            if hot_value != 'N/A' or category or label:
-                info_parts = [part for part in [f"🔥 {hot_value}" if hot_value != 'N/A' else "", category, label] if part]
-                if info_parts:
-                    event.chain_result(f"    {' '.join(info_parts)}")
-            #event.chain_result("-" * 70)
-        '''
-        yield event.plain_result(self.fetch_weibo_hot_simple())
-        
-        
+        result = await self.fetch_weibo_hot_simple()
+        if result:
+            yield event.plain_result(result)
+        else:
+            yield event.plain_result("❌ 未能获取到微博热榜数据")
 
-    async def terminate(self):
-        """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
-    def fetch_weibo_hot_simple(self):
+    # 将 fetch_weibo_hot_simple 方法改为异步方法
+    async def fetch_weibo_hot_simple(self):
+        with open('data/plugins/astrbot_plugin_weibo_hot/config.json', 'r', encoding='utf-8') as file:
+            data = json.load(file)
+
         url = "https://s.weibo.com/top/summary"
         headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Referer': 'https://weibo.com/',
-                    "Cookie": "SUB=_2AkMWJrkXf8NxqwJRmP8SxWjnaY12zwnEieKgekjMJRMxHRl-yj9jqmtbtRB6PaaX-IGp-AjmO6k5cS-OH2X9CayaTzVD"
-                }
-        response = requests.get(url, headers=headers)
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://weibo.com/',
+                "Cookie": data["Cookie"]
+            }
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status() # 检查请求是否成功
+        except httpx.RequestError as e:
+            logger.error(f"获取微博热榜失败: {e}")
+            return ""
         soup = BeautifulSoup(response.text, 'html.parser')
-
-        result = ""
-        # 处理置顶项
+        lines = [] # 使用列表存储每一行
         pinned = soup.select_one('#pl_top_realtimehot table tr td.td-02 a')
         if pinned:
-            result += f"置顶.{pinned.text.strip()}(🔥置顶)\n"
-
+            lines.append(f"置顶.{pinned.text.strip()}(🔥置顶)")
+        
         for i, item in enumerate(soup.select('#pl_top_realtimehot tbody tr')[1:], 1):
             title = item.select_one('.td-02 a').text.strip()
             hot = item.select_one('.td-02 span').text.strip() if item.select_one('.td-02 span') else "0"
-            result += f"{i}.{title}(🔥{hot})\n"
-        return result.strip()
+            lines.append(f"{i}.{title}(🔥{hot})")
+            
+        return "\n".join(lines) # 最后统一拼接
 
 
 

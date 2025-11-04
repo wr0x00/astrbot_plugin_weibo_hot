@@ -1,2 +1,2 @@
 httpx
-bs4
+beautifulsoup4
